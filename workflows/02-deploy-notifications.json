@@ -1,0 +1,227 @@
+{
+  "name": "Deploy Notifications",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "started"
+            }
+          ]
+        }
+      },
+      "id": "if-started",
+      "name": "If Started",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 150]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "if-success",
+      "name": "If Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "failed"
+            }
+          ]
+        }
+      },
+      "id": "if-failed",
+      "name": "If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:rocket: *Deploying to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+      },
+      "id": "format-started",
+      "name": "Format Started",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst commitMessage = event.commit?.message || '';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:white_check_mark: *Deployed to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n*Message:* ${commitMessage.split('\\n')[0].substring(0, 80)}\\n<${pipelineUrl}|View Pipeline>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+      },
+      "id": "format-success",
+      "name": "Format Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\nconst mention = config?.mentions?.on_failure || '<!channel>';\n\nconst text = `:x: *Deployment Failed* ${mention}\\n*Project:* ${projectName}\\n*Environment:* ${env}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n<${pipelineUrl}|View Logs>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.alerts || '#alerts',\n    text: text\n  }\n}];"
+      },
+      "id": "format-failed",
+      "name": "Format Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [700, 500]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "send-slack-started",
+      "name": "Send Slack (Started)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [950, 100]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "send-slack-success",
+      "name": "Send Slack (Success)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "send-slack-failed",
+      "name": "Send Slack (Failed)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [950, 500]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "If Started",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Started": {
+      "main": [
+        [
+          {
+            "node": "Format Started",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Success": {
+      "main": [
+        [
+          {
+            "node": "Format Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Failed": {
+      "main": [
+        [
+          {
+            "node": "Format Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Format Started": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Started)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Success": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Failed": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

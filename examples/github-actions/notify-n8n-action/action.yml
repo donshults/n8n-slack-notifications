@@ -1,0 +1,55 @@
+# Reusable composite action for n8n notifications
+# Copy this folder to .github/actions/notify-n8n/ in your project
+
+name: 'Notify n8n'
+description: 'Send notification to n8n webhook for Slack delivery'
+
+inputs:
+  webhook_url:
+    description: 'n8n webhook URL'
+    required: true
+  event_type:
+    description: 'Event type (deploy, test, alert)'
+    required: true
+  status:
+    description: 'Status (started, success, failed)'
+    required: true
+  project_id:
+    description: 'Project ID (slug)'
+    required: true
+  project_name:
+    description: 'Project display name'
+    required: true
+  environment:
+    description: 'Environment (staging, production)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Send notification to n8n
+      shell: bash
+      run: |
+        curl -s -X POST "${{ inputs.webhook_url }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "event_type": "${{ inputs.event_type }}",
+            "status": "${{ inputs.status }}",
+            "project": {
+              "id": "${{ inputs.project_id }}",
+              "name": "${{ inputs.project_name }}"
+            },
+            "environment": "${{ inputs.environment }}",
+            "actor": {
+              "github_username": "${{ github.actor }}"
+            },
+            "commit": {
+              "sha": "${{ github.sha }}",
+              "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+            },
+            "pipeline": {
+              "id": "${{ github.run_id }}",
+              "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+          }'

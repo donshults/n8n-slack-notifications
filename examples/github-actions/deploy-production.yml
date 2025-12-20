@@ -1,0 +1,120 @@
+# Example: Deploy to Production with n8n notifications
+# Copy this file to .github/workflows/deploy-production.yml in your project
+
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm production deployment'
+        required: true
+        type: string
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate confirmation
+        if: ${{ github.event.inputs.confirm != 'deploy' }}
+        run: |
+          echo "You must type 'deploy' to confirm production deployment"
+          exit 1
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Notify n8n - Deploy Started
+        run: |
+          curl -s -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "started",
+              "project": {
+                "id": "your-project-id",
+                "name": "Your Project Name"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": "Manual production deployment",
+                "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }'
+
+      # ===========================================
+      # YOUR DEPLOYMENT STEPS HERE
+      # ===========================================
+      - name: Deploy to Production
+        run: |
+          echo "Add your production deployment commands here"
+          # Examples:
+          # - railway up --environment production
+          # - aws s3 sync ./dist s3://your-prod-bucket
+          # - kubectl apply -f k8s/production/
+
+      - name: Notify n8n - Deploy Success
+        if: success()
+        run: |
+          curl -s -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "success",
+              "project": {
+                "id": "your-project-id",
+                "name": "Your Project Name"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": "Manual production deployment",
+                "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }'
+
+      - name: Notify n8n - Deploy Failed
+        if: failure()
+        run: |
+          curl -s -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "failed",
+              "project": {
+                "id": "your-project-id",
+                "name": "Your Project Name"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": "Manual production deployment",
+                "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }'

@@ -1,0 +1,60 @@
+# Example: Test workflow with n8n notifications on failure
+# Copy this file to .github/workflows/test.yml in your project
+
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ===========================================
+      # YOUR TEST SETUP AND EXECUTION HERE
+      # ===========================================
+      - name: Setup
+        run: |
+          echo "Add your setup commands here"
+          # Examples:
+          # - npm ci
+          # - pip install -r requirements.txt
+          # - go mod download
+
+      - name: Run Tests
+        run: |
+          echo "Add your test commands here"
+          # Examples:
+          # - npm test
+          # - pytest
+          # - go test ./...
+
+      - name: Notify n8n - Test Failed
+        if: failure()
+        run: |
+          curl -s -X POST ${{ secrets.N8N_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "test",
+              "status": "failed",
+              "project": {
+                "id": "your-project-id",
+                "name": "Your Project Name"
+              },
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": "${{ github.event.head_commit.message }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }'

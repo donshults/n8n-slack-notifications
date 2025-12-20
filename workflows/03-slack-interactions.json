@@ -1,0 +1,447 @@
+{
+  "name": "Slack Interaction Handler",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-interactions",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-slack",
+      "name": "Slack Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "slack-interactions"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Slack interaction payload\n// Slack sends form-urlencoded data with a 'payload' field containing JSON\n\nconst body = $input.item.json.body || $input.item.json;\nlet payload;\n\nif (typeof body === 'string') {\n  const params = new URLSearchParams(body);\n  payload = JSON.parse(params.get('payload'));\n} else if (body.payload) {\n  payload = JSON.parse(body.payload);\n} else {\n  payload = body;\n}\n\nreturn payload;"
+      },
+      "id": "parse-payload",
+      "name": "Parse Slack Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type }}",
+              "value2": "url_verification"
+            }
+          ]
+        }
+      },
+      "id": "if-verification",
+      "name": "If Verification",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 150]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.type }}",
+              "value2": "block_actions"
+            }
+          ]
+        }
+      },
+      "id": "if-block-actions",
+      "name": "If Block Actions",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"challenge\": $json.challenge } }}"
+      },
+      "id": "respond-verification",
+      "name": "Respond Verification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract action details from button click\nconst payload = $input.item.json;\n\nconst action = payload.actions && payload.actions[0] ? payload.actions[0] : {};\nconst actionId = action.action_id || '';\nconst user = payload.user && payload.user.username ? payload.user.username : 'unknown';\nconst userId = payload.user && payload.user.id ? payload.user.id : '';\nconst channel = payload.channel && payload.channel.id ? payload.channel.id : '';\nconst messageTs = payload.message && payload.message.ts ? payload.message.ts : '';\nconst responseUrl = payload.response_url || '';\n\n// Parse action_id format: {action}_{project}_{runId}\nconst parts = actionId.split('_');\nconst actionType = parts[0] || '';\nconst project = parts[1] || '';\nconst runId = parts.slice(2).join('_') || '';\n\nreturn {\n  actionType: actionType,\n  actionId: actionId,\n  project: project,\n  runId: runId,\n  user: user,\n  userId: userId,\n  channel: channel,\n  messageTs: messageTs,\n  responseUrl: responseUrl,\n  originalPayload: payload\n};"
+      },
+      "id": "extract-action",
+      "name": "Extract Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [900, 350]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.actionType }}",
+              "value2": "approve"
+            }
+          ]
+        }
+      },
+      "id": "if-approve",
+      "name": "If Approve",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.actionType }}",
+              "value2": "reject"
+            }
+          ]
+        }
+      },
+      "id": "if-reject",
+      "name": "If Reject",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.actionType }}",
+              "value2": "rollback"
+            }
+          ]
+        }
+      },
+      "id": "if-rollback",
+      "name": "If Rollback",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '✅ Approved by @' + $json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "handle-approve",
+      "name": "Update Message - Approved",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1350, 150]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '❌ Rejected by @' + $json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "handle-reject",
+      "name": "Update Message - Rejected",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1350, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "false"
+            },
+            {
+              "name": "text",
+              "value": "={{ '⏪ Rollback initiated by @' + $json.user + '...' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "handle-rollback",
+      "name": "Update Message - Rollback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1350, 550]
+    },
+    {
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      },
+      "id": "respond-empty",
+      "name": "Respond Empty",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1600, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TODO: Trigger GitHub Actions workflow for approval\n// This would call the GitHub API to dispatch a workflow\n\nconsole.log('Triggering production deploy for:', $input.item.json.project);\nconsole.log('Run ID:', $input.item.json.runId);\nconsole.log('Approved by:', $input.item.json.user);\n\n// For now, just pass through\nreturn $input.item.json;"
+      },
+      "id": "trigger-deploy",
+      "name": "Trigger Deploy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1550, 150],
+      "notes": "TODO: Implement GitHub Actions dispatch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// TODO: Trigger rollback via Railway or GitHub\n\nconsole.log('Triggering rollback for:', $input.item.json.project);\nconsole.log('Requested by:', $input.item.json.user);\n\nreturn $input.item.json;"
+      },
+      "id": "trigger-rollback",
+      "name": "Trigger Rollback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1550, 550],
+      "notes": "TODO: Implement Railway rollback API call"
+    }
+  ],
+  "connections": {
+    "Slack Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Slack Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Slack Payload": {
+      "main": [
+        [
+          {
+            "node": "If Verification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Block Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Verification": {
+      "main": [
+        [
+          {
+            "node": "Respond Verification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Block Actions": {
+      "main": [
+        [
+          {
+            "node": "Extract Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Action": {
+      "main": [
+        [
+          {
+            "node": "If Approve",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Reject",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Approve": {
+      "main": [
+        [
+          {
+            "node": "Update Message - Approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Reject": {
+      "main": [
+        [
+          {
+            "node": "Update Message - Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Rollback": {
+      "main": [
+        [
+          {
+            "node": "Update Message - Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Update Message - Approved": {
+      "main": [
+        [
+          {
+            "node": "Trigger Deploy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Deploy": {
+      "main": [
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Message - Rejected": {
+      "main": [
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Message - Rollback": {
+      "main": [
+        [
+          {
+            "node": "Trigger Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Rollback": {
+      "main": [
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

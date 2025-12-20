@@ -1,0 +1,271 @@
+{
+  "name": "Notification Receiver",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notify",
+        "options": {}
+      },
+      "id": "webhook-receiver",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "notification-receiver"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalize the incoming event\nconst body = $input.first().json.body || $input.first().json;\n\nif (!body.event_type) {\n  throw new Error('Missing required field: event_type');\n}\n\nif (!body.project || !body.project.id) {\n  throw new Error('Missing required field: project.id');\n}\n\n// Normalize and add metadata\nconst event = {\n  ...body,\n  status: (body.status || 'unknown').toLowerCase(),\n  _received_at: new Date().toISOString()\n};\n\n// Default config (can be replaced with Airtable lookup later)\nconst config = {\n  channels: {\n    default: '#deployments',\n    deploys: '#deployments',\n    alerts: '#alerts',\n    approvals: '#deployment-approvals'\n  },\n  notifications: {\n    test_success: false,\n    test_failure: true,\n    deploy_started: true,\n    deploy_success: true,\n    deploy_failure: true\n  },\n  mentions: {\n    on_failure: '<!channel>',\n    approvers: []\n  }\n};\n\nreturn [{ json: { event, config } }];"
+      },
+      "id": "validate-event",
+      "name": "Validate & Configure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "deploy"
+            }
+          ]
+        }
+      },
+      "id": "if-deploy",
+      "name": "If Deploy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "test"
+            }
+          ]
+        }
+      },
+      "id": "if-test",
+      "name": "If Test",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "alert"
+            }
+          ]
+        }
+      },
+      "id": "if-alert",
+      "name": "If Alert",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 600]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $env.WORKFLOW_DEPLOY_NOTIFICATIONS }}",
+        "options": {}
+      },
+      "id": "exec-deploy",
+      "name": "Deploy Notifications",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [900, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log test events for now\nconsole.log('Test event received:', $json.event);\nreturn $input.all();"
+      },
+      "id": "handle-test",
+      "name": "Handle Test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [900, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log alert events for now\nconsole.log('Alert event received:', $json.event);\nreturn $input.all();"
+      },
+      "id": "handle-alert",
+      "name": "Handle Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [900, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log unknown events\nconsole.log('Unknown event type:', $json.event.event_type);\nreturn $input.all();"
+      },
+      "id": "handle-unknown",
+      "name": "Handle Unknown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [900, 750]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "received",
+              "value": "true"
+            },
+            {
+              "name": "event_type",
+              "value": "={{ $json.event.event_type }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.event.project.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-response",
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1150, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Configure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Configure": {
+      "main": [
+        [
+          {
+            "node": "If Deploy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Test",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Deploy": {
+      "main": [
+        [
+          {
+            "node": "Deploy Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Unknown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Test": {
+      "main": [
+        [
+          {
+            "node": "Handle Test",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If Alert": {
+      "main": [
+        [
+          {
+            "node": "Handle Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Deploy Notifications": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Test": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Alert": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Unknown": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}
