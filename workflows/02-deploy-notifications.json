@@ -62,7 +62,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:rocket: *Deploying to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:rocket: *Deploying to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text,\n    _originalContext: {\n      event: event,\n      config: config\n    }\n  }\n}];"
       },
       "id": "format-started",
       "name": "Format Started",
@@ -72,7 +72,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst commitMessage = event.commit?.message || '';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:white_check_mark: *Deployed to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n*Message:* ${commitMessage.split('\\n')[0].substring(0, 80)}\\n<${pipelineUrl}|View Pipeline>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst commitMessage = event.commit?.message || '';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:white_check_mark: *Deployed to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n*Message:* ${commitMessage.split('\\n')[0].substring(0, 80)}\\n<${pipelineUrl}|View Pipeline>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text,\n    _originalContext: {\n      event: event,\n      config: config\n    }\n  }\n}];"
       },
       "id": "format-success",
       "name": "Format Success",
@@ -82,7 +82,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\nconst mention = config?.mentions?.on_failure || '<!channel>';\n\nconst text = `:x: *Deployment Failed* ${mention}\\n*Project:* ${projectName}\\n*Environment:* ${env}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n<${pipelineUrl}|View Logs>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.alerts || '#alerts',\n    text: text\n  }\n}];"
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\nconst mention = config?.mentions?.on_failure || '<!channel>';\n\nconst text = `:x: *Deployment Failed* ${mention}\\n*Project:* ${projectName}\\n*Environment:* ${env}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n<${pipelineUrl}|View Logs>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.alerts || '#alerts',\n    text: text,\n    _originalContext: {\n      event: event,\n      config: config\n    }\n  }\n}];"
       },
       "id": "format-failed",
       "name": "Format Failed",
@@ -100,7 +100,137 @@
       "name": "Send Slack (Started)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [950, 100]
+      "position": [950, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-started-error-1",
+      "name": "If Started Error 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1150, 100]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-started-1",
+      "name": "Wait Started 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1350, 50]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Started node\nconst items = $input.all();\nconst originalData = items[0].json;\n\n// Access data from earlier in the chain\nconst formatStartedData = $('Format Started').first().json;\n\nreturn [{\n  json: {\n    channel: formatStartedData.channel,\n    text: formatStartedData.text,\n    _originalContext: formatStartedData._originalContext,\n    _retryAttempt: 1\n  }\n}];"
+      },
+      "id": "prepare-started-retry-1",
+      "name": "Prepare Started Retry 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1550, 50]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-started-1",
+      "name": "Retry Slack (Started) 1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1750, 50],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-started-error-2",
+      "name": "If Started Error 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1950, 50]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-started-2",
+      "name": "Wait Started 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2150, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Started node\nconst formatStartedData = $('Format Started').first().json;\n\nreturn [{\n  json: {\n    channel: formatStartedData.channel,\n    text: formatStartedData.text,\n    _originalContext: formatStartedData._originalContext,\n    _retryAttempt: 2\n  }\n}];"
+      },
+      "id": "prepare-started-retry-2",
+      "name": "Prepare Started Retry 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2350, 0]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-started-2",
+      "name": "Retry Slack (Started) 2",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [2550, 0],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-started-error-3",
+      "name": "If Started Error 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third and final failure - throw error to trigger error workflow\nconst formatStartedData = $('Format Started').first().json;\nconst originalContext = formatStartedData._originalContext || {};\n\nconst errorDetails = {\n  error_type: 'slack_api_error',\n  notification_type: 'deploy_started',\n  project_id: originalContext.event?.project?.id || 'unknown',\n  project_name: originalContext.event?.project?.name || 'Unknown Project',\n  environment: originalContext.event?.environment || 'unknown',\n  message: formatStartedData.text,\n  channel: formatStartedData.channel,\n  retry_attempts: 3,\n  original_event: originalContext.event\n};\n\nthrow new Error(`Slack notification failed after 3 attempts. Details: ${JSON.stringify(errorDetails)}`);"
+      },
+      "id": "throw-started-error",
+      "name": "Throw Started Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, -50]
     },
     {
       "parameters": {
@@ -112,7 +242,137 @@
       "name": "Send Slack (Success)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [950, 300]
+      "position": [950, 300],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-success-error-1",
+      "name": "If Success Error 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1150, 300]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-success-1",
+      "name": "Wait Success 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1350, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Success node\nconst formatSuccessData = $('Format Success').first().json;\n\nreturn [{\n  json: {\n    channel: formatSuccessData.channel,\n    text: formatSuccessData.text,\n    _originalContext: formatSuccessData._originalContext,\n    _retryAttempt: 1\n  }\n}];"
+      },
+      "id": "prepare-success-retry-1",
+      "name": "Prepare Success Retry 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1550, 250]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-success-1",
+      "name": "Retry Slack (Success) 1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1750, 250],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-success-error-2",
+      "name": "If Success Error 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1950, 250]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-success-2",
+      "name": "Wait Success 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2150, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Success node\nconst formatSuccessData = $('Format Success').first().json;\n\nreturn [{\n  json: {\n    channel: formatSuccessData.channel,\n    text: formatSuccessData.text,\n    _originalContext: formatSuccessData._originalContext,\n    _retryAttempt: 2\n  }\n}];"
+      },
+      "id": "prepare-success-retry-2",
+      "name": "Prepare Success Retry 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2350, 200]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-success-2",
+      "name": "Retry Slack (Success) 2",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [2550, 200],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-success-error-3",
+      "name": "If Success Error 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third and final failure - throw error to trigger error workflow\nconst formatSuccessData = $('Format Success').first().json;\nconst originalContext = formatSuccessData._originalContext || {};\n\nconst errorDetails = {\n  error_type: 'slack_api_error',\n  notification_type: 'deploy_success',\n  project_id: originalContext.event?.project?.id || 'unknown',\n  project_name: originalContext.event?.project?.name || 'Unknown Project',\n  environment: originalContext.event?.environment || 'unknown',\n  message: formatSuccessData.text,\n  channel: formatSuccessData.channel,\n  retry_attempts: 3,\n  original_event: originalContext.event\n};\n\nthrow new Error(`Slack notification failed after 3 attempts. Details: ${JSON.stringify(errorDetails)}`);"
+      },
+      "id": "throw-success-error",
+      "name": "Throw Success Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, 150]
     },
     {
       "parameters": {
@@ -124,7 +384,137 @@
       "name": "Send Slack (Failed)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [950, 500]
+      "position": [950, 500],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-failed-error-1",
+      "name": "If Failed Error 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1150, 500]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-failed-1",
+      "name": "Wait Failed 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1350, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Failed node\nconst formatFailedData = $('Format Failed').first().json;\n\nreturn [{\n  json: {\n    channel: formatFailedData.channel,\n    text: formatFailedData.text,\n    _originalContext: formatFailedData._originalContext,\n    _retryAttempt: 1\n  }\n}];"
+      },
+      "id": "prepare-failed-retry-1",
+      "name": "Prepare Failed Retry 1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1550, 450]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-failed-1",
+      "name": "Retry Slack (Failed) 1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1750, 450],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-failed-error-2",
+      "name": "If Failed Error 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1950, 450]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-failed-2",
+      "name": "Wait Failed 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2150, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Retrieve original context from the Format Failed node\nconst formatFailedData = $('Format Failed').first().json;\n\nreturn [{\n  json: {\n    channel: formatFailedData.channel,\n    text: formatFailedData.text,\n    _originalContext: formatFailedData._originalContext,\n    _retryAttempt: 2\n  }\n}];"
+      },
+      "id": "prepare-failed-retry-2",
+      "name": "Prepare Failed Retry 2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2350, 400]
+    },
+    {
+      "parameters": {
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "retry-slack-failed-2",
+      "name": "Retry Slack (Failed) 2",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [2550, 400],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || $json.errorMessage !== undefined }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-failed-error-3",
+      "name": "If Failed Error 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third and final failure - throw error to trigger error workflow\nconst formatFailedData = $('Format Failed').first().json;\nconst originalContext = formatFailedData._originalContext || {};\n\nconst errorDetails = {\n  error_type: 'slack_api_error',\n  notification_type: 'deploy_failed',\n  project_id: originalContext.event?.project?.id || 'unknown',\n  project_name: originalContext.event?.project?.name || 'Unknown Project',\n  environment: originalContext.event?.environment || 'unknown',\n  message: formatFailedData.text,\n  channel: formatFailedData.channel,\n  retry_attempts: 3,\n  original_event: originalContext.event\n};\n\nthrow new Error(`Slack notification failed after 3 attempts. Details: ${JSON.stringify(errorDetails)}`);"
+      },
+      "id": "throw-failed-error",
+      "name": "Throw Failed Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, 350]
     }
   ],
   "connections": {
@@ -216,6 +606,345 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "Send Slack (Started)": {
+      "main": [
+        [
+          {
+            "node": "If Started Error 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Started Error 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Started 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Started 1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Started Retry 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Started Retry 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Started) 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Started) 1": {
+      "main": [
+        [
+          {
+            "node": "If Started Error 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Started Error 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Started 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Started 2": {
+      "main": [
+        [
+          {
+            "node": "Prepare Started Retry 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Started Retry 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Started) 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Started) 2": {
+      "main": [
+        [
+          {
+            "node": "If Started Error 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Started Error 3": {
+      "main": [
+        [
+          {
+            "node": "Throw Started Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Slack (Success)": {
+      "main": [
+        [
+          {
+            "node": "If Success Error 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Success Error 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Success 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Success 1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Success Retry 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Success Retry 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Success) 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Success) 1": {
+      "main": [
+        [
+          {
+            "node": "If Success Error 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Success Error 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Success 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Success 2": {
+      "main": [
+        [
+          {
+            "node": "Prepare Success Retry 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Success Retry 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Success) 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Success) 2": {
+      "main": [
+        [
+          {
+            "node": "If Success Error 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Success Error 3": {
+      "main": [
+        [
+          {
+            "node": "Throw Success Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Slack (Failed)": {
+      "main": [
+        [
+          {
+            "node": "If Failed Error 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed Error 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Failed 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Failed 1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Failed Retry 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Failed Retry 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Failed) 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Failed) 1": {
+      "main": [
+        [
+          {
+            "node": "If Failed Error 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed Error 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Failed 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Wait Failed 2": {
+      "main": [
+        [
+          {
+            "node": "Prepare Failed Retry 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Failed Retry 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Slack (Failed) 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Slack (Failed) 2": {
+      "main": [
+        [
+          {
+            "node": "If Failed Error 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed Error 3": {
+      "main": [
+        [
+          {
+            "node": "Throw Failed Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

@@ -1,0 +1,536 @@
+{
+  "name": "Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract error context from the Error Trigger node output\n// Uses try-catch to prevent extraction failures from breaking the error handler\n\ntry {\n  const errorData = $input.first().json;\n  \n  // Extract workflow information\n  const workflowName = errorData.workflow?.name || 'Unknown Workflow';\n  const workflowId = errorData.workflow?.id || '';\n  \n  // Extract error details\n  const errorMessage = errorData.execution?.error?.message || \n                       errorData.error?.message || \n                       'Unknown error occurred';\n  const errorStack = errorData.execution?.error?.stack || '';\n  const nodeName = errorData.execution?.lastNodeExecuted || 'Unknown Node';\n  \n  // Extract timestamp\n  const timestamp = new Date().toISOString();\n  const executionId = errorData.execution?.id || '';\n  \n  // Attempt to extract original payload from execution data\n  let originalPayload = {};\n  let projectId = 'unknown';\n  let projectName = 'Unknown Project';\n  let status = 'unknown';\n  let environment = 'unknown';\n  \n  try {\n    // Try to find the original event data in execution context\n    const executionData = errorData.execution?.data;\n    if (executionData && executionData.resultData && executionData.resultData.runData) {\n      const runData = executionData.resultData.runData;\n      \n      // Look for webhook or start node data\n      const webhookData = runData['Webhook'] || runData['Start'] || {};\n      if (webhookData[0] && webhookData[0].data && webhookData[0].data.main && webhookData[0].data.main[0]) {\n        const firstItem = webhookData[0].data.main[0][0];\n        if (firstItem && firstItem.json) {\n          const eventData = firstItem.json.body || firstItem.json.event || firstItem.json;\n          originalPayload = eventData;\n          \n          // Extract project info\n          if (eventData.project) {\n            projectId = eventData.project.id || 'unknown';\n            projectName = eventData.project.name || eventData.project.id || 'Unknown Project';\n          }\n          if (eventData.event && eventData.event.project) {\n            projectId = eventData.event.project.id || projectId;\n            projectName = eventData.event.project.name || eventData.event.project.id || projectName;\n          }\n          \n          // Extract status and environment\n          status = eventData.status || eventData.event?.status || 'unknown';\n          environment = eventData.environment || eventData.event?.environment || 'unknown';\n        }\n      }\n    }\n  } catch (payloadError) {\n    // If we can't extract the payload, continue with defaults\n    console.log('Could not extract original payload:', payloadError.message);\n  }\n  \n  // Determine error type from error message pattern\n  let errorType = 'unknown_error';\n  const lowerMessage = errorMessage.toLowerCase();\n  \n  if (lowerMessage.includes('token') || lowerMessage.includes('auth') || lowerMessage.includes('credential')) {\n    errorType = 'auth_error';\n  } else if (lowerMessage.includes('rate limit') || lowerMessage.includes('429') || lowerMessage.includes('too many')) {\n    errorType = 'rate_limit_error';\n  } else if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {\n    errorType = 'timeout_error';\n  } else if (lowerMessage.includes('network') || lowerMessage.includes('connection') || lowerMessage.includes('ECONNREFUSED')) {\n    errorType = 'network_error';\n  } else if (lowerMessage.includes('slack')) {\n    errorType = 'slack_api_error';\n  } else if (lowerMessage.includes('http') || lowerMessage.includes('status code')) {\n    errorType = 'http_error';\n  }\n  \n  // Build deduplication key\n  const dedupKey = `${errorType}_${projectId}`;\n  \n  return [{\n    json: {\n      workflowName,\n      workflowId,\n      errorMessage,\n      errorStack,\n      nodeName,\n      timestamp,\n      executionId,\n      projectId,\n      projectName,\n      status,\n      environment,\n      errorType,\n      dedupKey,\n      originalPayload\n    }\n  }];\n} catch (extractionError) {\n  // Return minimal context if extraction fails completely\n  return [{\n    json: {\n      workflowName: 'Unknown Workflow',\n      workflowId: '',\n      errorMessage: 'Error extraction failed: ' + extractionError.message,\n      errorStack: '',\n      nodeName: 'Unknown',\n      timestamp: new Date().toISOString(),\n      executionId: '',\n      projectId: 'unknown',\n      projectName: 'Unknown Project',\n      status: 'unknown',\n      environment: 'unknown',\n      errorType: 'extraction_error',\n      dedupKey: 'extraction_error_unknown',\n      originalPayload: {}\n    }\n  }];\n}"
+      },
+      "id": "extract-context",
+      "name": "Extract Error Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "filterByFormula": "={project_id}=\"{{ $json.projectId }}\"",
+        "options": {}
+      },
+      "id": "lookup-project",
+      "name": "Lookup Project Recipients",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "",
+          "name": "Airtable - n8n Notifications"
+        }
+      },
+      "notes": "Query Projects table by project_id. Configure base and table IDs after import."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process Airtable lookup results and set recipients\n// Uses try-catch to handle lookup failures gracefully\n\ntry {\n  const context = $('Extract Error Context').first().json;\n  const airtableResults = $input.all();\n  \n  let recipients = 'don@callteksupport.com'; // Default recipient\n  let projectFound = false;\n  \n  if (airtableResults && airtableResults.length > 0) {\n    const record = airtableResults[0].json;\n    if (record && record.recipients) {\n      recipients = record.recipients;\n      projectFound = true;\n    }\n  }\n  \n  return [{\n    json: {\n      ...context,\n      recipients,\n      projectFound\n    }\n  }];\n} catch (error) {\n  // If lookup fails, use default recipient\n  const context = $('Extract Error Context').first().json;\n  return [{\n    json: {\n      ...context,\n      recipients: 'don@callteksupport.com',\n      projectFound: false,\n      lookupError: error.message\n    }\n  }];\n}"
+      },
+      "id": "process-recipients",
+      "name": "Process Recipients",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "filterByFormula": "={dedup_key}=\"{{ $json.dedupKey }}\"",
+        "options": {}
+      },
+      "id": "check-dedup",
+      "name": "Check Deduplication",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "",
+          "name": "Airtable - n8n Notifications"
+        }
+      },
+      "notes": "Query Error Deduplication table by dedup_key. Configure base and table IDs after import."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if we should send email based on deduplication window\n// 5-minute window prevents duplicate emails for the same error type + project\n\ntry {\n  const context = $('Process Recipients').first().json;\n  const dedupResults = $input.all();\n  \n  const now = new Date();\n  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);\n  \n  let shouldSendEmail = true;\n  let existingRecordId = null;\n  let currentCount = 0;\n  \n  if (dedupResults && dedupResults.length > 0) {\n    const record = dedupResults[0].json;\n    if (record) {\n      existingRecordId = record.id || null;\n      currentCount = record.count || 0;\n      \n      if (record.last_sent) {\n        const lastSent = new Date(record.last_sent);\n        if (lastSent > fiveMinutesAgo) {\n          // Within deduplication window - skip sending\n          shouldSendEmail = false;\n        }\n      }\n    }\n  }\n  \n  return [{\n    json: {\n      ...context,\n      shouldSendEmail,\n      existingRecordId,\n      currentCount,\n      currentTimestamp: now.toISOString()\n    }\n  }];\n} catch (error) {\n  // If dedup check fails, send email anyway (fail open)\n  const context = $('Process Recipients').first().json;\n  return [{\n    json: {\n      ...context,\n      shouldSendEmail: true,\n      existingRecordId: null,\n      currentCount: 0,\n      currentTimestamp: new Date().toISOString(),\n      dedupError: error.message\n    }\n  }];\n}"
+      },
+      "id": "process-dedup",
+      "name": "Process Deduplication",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldSendEmail }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-should-send",
+      "name": "Should Send Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "id": "={{ $json.existingRecordId }}",
+        "fields": {
+          "values": [
+            {
+              "fieldId": "last_sent",
+              "fieldValue": "={{ $json.currentTimestamp }}"
+            },
+            {
+              "fieldId": "count",
+              "fieldValue": "={{ $json.currentCount + 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-dedup-existing",
+      "name": "Update Dedup Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 200],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "",
+          "name": "Airtable - n8n Notifications"
+        }
+      },
+      "notes": "Update existing dedup record. Configure base and table IDs after import."
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "fields": {
+          "values": [
+            {
+              "fieldId": "error_type",
+              "fieldValue": "={{ $json.errorType }}"
+            },
+            {
+              "fieldId": "project_id",
+              "fieldValue": "={{ $json.projectId }}"
+            },
+            {
+              "fieldId": "last_sent",
+              "fieldValue": "={{ $json.currentTimestamp }}"
+            },
+            {
+              "fieldId": "count",
+              "fieldValue": "=1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-dedup-new",
+      "name": "Create Dedup Record",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1650, 400],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "",
+          "name": "Airtable - n8n Notifications"
+        }
+      },
+      "notes": "Create new dedup record. Configure base and table IDs after import."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.existingRecordId !== null && $json.existingRecordId !== '' }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-record-exists",
+      "name": "Record Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML email template for notification fallback\n// This email is sent to project recipients when Slack delivery fails\n\ntry {\n  const context = $('Process Deduplication').first().json;\n  \n  // Determine status badge color and text\n  let badgeColor = '#808080'; // gray default\n  let badgeText = 'UNKNOWN';\n  let statusEmoji = '';\n  \n  switch (context.status.toLowerCase()) {\n    case 'started':\n      badgeColor = '#3498db'; // blue\n      badgeText = 'DEPLOYING';\n      statusEmoji = '&#x1F680;'; // rocket\n      break;\n    case 'success':\n      badgeColor = '#27ae60'; // green\n      badgeText = 'SUCCESS';\n      statusEmoji = '&#x2705;'; // check mark\n      break;\n    case 'failed':\n      badgeColor = '#e74c3c'; // red\n      badgeText = 'FAILED';\n      statusEmoji = '&#x274C;'; // x mark\n      break;\n  }\n  \n  // Extract commit info from original payload if available\n  let commitInfo = '';\n  if (context.originalPayload) {\n    const payload = context.originalPayload;\n    const commit = payload.commit || payload.event?.commit || {};\n    const actor = payload.actor || payload.event?.actor || {};\n    \n    if (commit.sha) {\n      const shortSha = commit.sha.substring(0, 7);\n      const commitUrl = commit.url || '#';\n      const commitMessage = commit.message ? commit.message.split('\\n')[0].substring(0, 80) : '';\n      const actorName = actor.github_username || actor.name || 'Unknown';\n      \n      commitInfo = `\n        <tr>\n          <td style=\"padding: 8px 0; color: #666;\">Commit:</td>\n          <td style=\"padding: 8px 0;\"><a href=\"${commitUrl}\" style=\"color: #3498db;\">${shortSha}</a></td>\n        </tr>\n        <tr>\n          <td style=\"padding: 8px 0; color: #666;\">Message:</td>\n          <td style=\"padding: 8px 0;\">${commitMessage || 'No message'}</td>\n        </tr>\n        <tr>\n          <td style=\"padding: 8px 0; color: #666;\">By:</td>\n          <td style=\"padding: 8px 0;\">${actorName}</td>\n        </tr>\n      `;\n    }\n  }\n  \n  const subject = `[${context.projectName}] ${context.status.toUpperCase()} - Slack Notification Failed`;\n  \n  const htmlBody = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body style=\"margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;\">\n  <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse;\">\n    <tr>\n      <td style=\"padding: 20px;\">\n        <table role=\"presentation\" style=\"max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);\">\n          <!-- Header -->\n          <tr>\n            <td style=\"padding: 24px; background-color: ${badgeColor}; border-radius: 8px 8px 0 0;\">\n              <h1 style=\"margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;\">\n                ${statusEmoji} ${badgeText} - ${context.projectName}\n              </h1>\n            </td>\n          </tr>\n          \n          <!-- Alert Banner -->\n          <tr>\n            <td style=\"padding: 16px 24px; background-color: #fff3cd; border-left: 4px solid #ffc107;\">\n              <p style=\"margin: 0; color: #856404; font-size: 14px;\">\n                <strong>Note:</strong> This email was sent because Slack notification delivery failed.\n              </p>\n            </td>\n          </tr>\n          \n          <!-- Notification Content -->\n          <tr>\n            <td style=\"padding: 24px;\">\n              <h2 style=\"margin: 0 0 16px 0; color: #333; font-size: 16px; font-weight: 600;\">Notification Details</h2>\n              <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse;\">\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666; width: 120px;\">Project:</td>\n                  <td style=\"padding: 8px 0; font-weight: 600;\">${context.projectName}</td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Environment:</td>\n                  <td style=\"padding: 8px 0;\">${context.environment}</td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Status:</td>\n                  <td style=\"padding: 8px 0;\">\n                    <span style=\"display: inline-block; padding: 2px 8px; background-color: ${badgeColor}; color: #fff; border-radius: 4px; font-size: 12px; font-weight: 600;\">${badgeText}</span>\n                  </td>\n                </tr>\n                ${commitInfo}\n              </table>\n            </td>\n          </tr>\n          \n          <!-- Error Details -->\n          <tr>\n            <td style=\"padding: 0 24px 24px 24px;\">\n              <div style=\"background-color: #f8f9fa; border-radius: 4px; padding: 16px; border: 1px solid #e9ecef;\">\n                <h3 style=\"margin: 0 0 12px 0; color: #333; font-size: 14px; font-weight: 600;\">Error Details</h3>\n                <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse; font-size: 13px;\">\n                  <tr>\n                    <td style=\"padding: 4px 0; color: #666; width: 100px;\">Workflow:</td>\n                    <td style=\"padding: 4px 0;\">${context.workflowName}</td>\n                  </tr>\n                  <tr>\n                    <td style=\"padding: 4px 0; color: #666;\">Node:</td>\n                    <td style=\"padding: 4px 0;\">${context.nodeName}</td>\n                  </tr>\n                  <tr>\n                    <td style=\"padding: 4px 0; color: #666;\">Error:</td>\n                    <td style=\"padding: 4px 0; color: #e74c3c;\">${context.errorMessage}</td>\n                  </tr>\n                  <tr>\n                    <td style=\"padding: 4px 0; color: #666;\">Time:</td>\n                    <td style=\"padding: 4px 0;\">${new Date(context.timestamp).toLocaleString()}</td>\n                  </tr>\n                </table>\n              </div>\n            </td>\n          </tr>\n          \n          <!-- Footer -->\n          <tr>\n            <td style=\"padding: 16px 24px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; border-top: 1px solid #e9ecef;\">\n              <p style=\"margin: 0; color: #666; font-size: 12px; text-align: center;\">\n                Sent by n8n Notification System | \n                <a href=\"https://nca-n8n.callteksupport.net\" style=\"color: #3498db;\">n8n Admin</a>\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>\n  `.trim();\n  \n  return [{\n    json: {\n      ...context,\n      notificationEmail: {\n        subject,\n        htmlBody,\n        recipients: context.recipients\n      }\n    }\n  }];\n} catch (error) {\n  // If template generation fails, create a simple fallback\n  const context = $('Process Deduplication').first().json;\n  const subject = `[${context.projectName || 'Unknown'}] Notification Failed`;\n  const htmlBody = `<html><body><p>A notification failed to send via Slack.</p><p>Project: ${context.projectName || 'Unknown'}</p><p>Error: ${context.errorMessage || 'Unknown error'}</p></body></html>`;\n  \n  return [{\n    json: {\n      ...context,\n      notificationEmail: {\n        subject,\n        htmlBody,\n        recipients: context.recipients || 'don@callteksupport.com'\n      },\n      templateError: error.message\n    }\n  }];\n}"
+      },
+      "id": "format-notification-email",
+      "name": "Format Notification Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@callteksupport.com",
+        "toEmail": "={{ $json.notificationEmail.recipients }}",
+        "subject": "={{ $json.notificationEmail.subject }}",
+        "body": "={{ $json.notificationEmail.htmlBody }}",
+        "options": {
+          "isBodyHtml": true
+        }
+      },
+      "id": "send-notification-email",
+      "name": "Send Notification Email",
+      "type": "n8n-nodes-base.awsSes",
+      "typeVersion": 1,
+      "position": [2050, 200],
+      "credentials": {
+        "aws": {
+          "id": "",
+          "name": "Amazon SES - Notifications"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Send notification fallback email to project recipients. Configure AWS credential after import."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML email template for admin alert\n// This email alerts administrators about Slack integration failures\n\ntry {\n  const context = $('Process Deduplication').first().json;\n  \n  const subject = `[n8n Alert] Slack Integration Failure - ${context.workflowName}`;\n  \n  const htmlBody = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n</head>\n<body style=\"margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;\">\n  <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse;\">\n    <tr>\n      <td style=\"padding: 20px;\">\n        <table role=\"presentation\" style=\"max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);\">\n          <!-- Header -->\n          <tr>\n            <td style=\"padding: 24px; background-color: #e74c3c; border-radius: 8px 8px 0 0;\">\n              <h1 style=\"margin: 0; color: #ffffff; font-size: 20px; font-weight: 600;\">\n                &#x26A0; Slack Integration Failure\n              </h1>\n            </td>\n          </tr>\n          \n          <!-- Error Summary -->\n          <tr>\n            <td style=\"padding: 24px;\">\n              <h2 style=\"margin: 0 0 16px 0; color: #333; font-size: 16px; font-weight: 600;\">Error Summary</h2>\n              <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse;\">\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666; width: 120px;\">Workflow:</td>\n                  <td style=\"padding: 8px 0; font-weight: 600;\">${context.workflowName}</td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Node:</td>\n                  <td style=\"padding: 8px 0;\">${context.nodeName}</td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Error Type:</td>\n                  <td style=\"padding: 8px 0;\">\n                    <span style=\"display: inline-block; padding: 2px 8px; background-color: #e74c3c; color: #fff; border-radius: 4px; font-size: 12px;\">${context.errorType.replace(/_/g, ' ').toUpperCase()}</span>\n                  </td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Project:</td>\n                  <td style=\"padding: 8px 0;\">${context.projectName} (${context.projectId})</td>\n                </tr>\n                <tr>\n                  <td style=\"padding: 8px 0; color: #666;\">Time:</td>\n                  <td style=\"padding: 8px 0;\">${new Date(context.timestamp).toLocaleString()}</td>\n                </tr>\n                ${context.executionId ? `<tr><td style=\"padding: 8px 0; color: #666;\">Execution ID:</td><td style=\"padding: 8px 0;\"><code style=\"background-color: #f8f9fa; padding: 2px 6px; border-radius: 3px; font-size: 12px;\">${context.executionId}</code></td></tr>` : ''}\n              </table>\n            </td>\n          </tr>\n          \n          <!-- Error Message -->\n          <tr>\n            <td style=\"padding: 0 24px 24px 24px;\">\n              <div style=\"background-color: #fdf2f2; border-radius: 4px; padding: 16px; border: 1px solid #f8d7da;\">\n                <h3 style=\"margin: 0 0 8px 0; color: #721c24; font-size: 14px; font-weight: 600;\">Error Message</h3>\n                <p style=\"margin: 0; color: #721c24; font-family: monospace; font-size: 13px; word-break: break-word;\">${context.errorMessage}</p>\n              </div>\n            </td>\n          </tr>\n          \n          <!-- Remediation Steps -->\n          <tr>\n            <td style=\"padding: 0 24px 24px 24px;\">\n              <div style=\"background-color: #e8f4fd; border-radius: 4px; padding: 16px; border: 1px solid #bee5eb;\">\n                <h3 style=\"margin: 0 0 12px 0; color: #0c5460; font-size: 14px; font-weight: 600;\">Recommended Actions</h3>\n                <ol style=\"margin: 0; padding-left: 20px; color: #0c5460; font-size: 13px;\">\n                  <li style=\"margin-bottom: 8px;\">Check <a href=\"https://status.slack.com\" style=\"color: #0c5460; font-weight: 600;\">Slack Status Page</a> for ongoing outages</li>\n                  <li style=\"margin-bottom: 8px;\">Verify Slack bot token is valid and not expired</li>\n                  <li style=\"margin-bottom: 8px;\">Review n8n credentials configuration for Slack integration</li>\n                  <li style=\"margin-bottom: 8px;\">Check execution logs in <a href=\"https://nca-n8n.callteksupport.net/executions\" style=\"color: #0c5460; font-weight: 600;\">n8n Execution History</a></li>\n                  <li style=\"margin-bottom: 8px;\">If token expired, regenerate token in Slack App settings</li>\n                </ol>\n              </div>\n            </td>\n          </tr>\n          \n          <!-- Quick Links -->\n          <tr>\n            <td style=\"padding: 0 24px 24px 24px;\">\n              <table role=\"presentation\" style=\"width: 100%; border-collapse: collapse;\">\n                <tr>\n                  <td style=\"padding: 8px; text-align: center;\">\n                    <a href=\"https://status.slack.com\" style=\"display: inline-block; padding: 10px 20px; background-color: #611f69; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 600;\">Slack Status</a>\n                  </td>\n                  <td style=\"padding: 8px; text-align: center;\">\n                    <a href=\"https://nca-n8n.callteksupport.net\" style=\"display: inline-block; padding: 10px 20px; background-color: #ff6d5a; color: #fff; text-decoration: none; border-radius: 4px; font-size: 14px; font-weight: 600;\">n8n Admin</a>\n                  </td>\n                </tr>\n              </table>\n            </td>\n          </tr>\n          \n          <!-- Footer -->\n          <tr>\n            <td style=\"padding: 16px 24px; background-color: #f8f9fa; border-radius: 0 0 8px 8px; border-top: 1px solid #e9ecef;\">\n              <p style=\"margin: 0; color: #666; font-size: 12px; text-align: center;\">\n                This is an automated alert from n8n Notification System<br>\n                <a href=\"https://nca-n8n.callteksupport.net/workflow/${context.workflowId}\" style=\"color: #3498db;\">View Workflow</a>\n              </p>\n            </td>\n          </tr>\n        </table>\n      </td>\n    </tr>\n  </table>\n</body>\n</html>\n  `.trim();\n  \n  return [{\n    json: {\n      ...context,\n      adminEmail: {\n        subject,\n        htmlBody,\n        recipient: 'don@callteksupport.com'\n      }\n    }\n  }];\n} catch (error) {\n  // If template generation fails, create a simple fallback\n  const context = $('Process Deduplication').first().json;\n  const subject = `[n8n Alert] Slack Integration Failure`;\n  const htmlBody = `<html><body><p>Slack integration is failing.</p><p>Workflow: ${context.workflowName || 'Unknown'}</p><p>Error: ${context.errorMessage || 'Unknown error'}</p><p>Please check n8n admin panel.</p></body></html>`;\n  \n  return [{\n    json: {\n      ...context,\n      adminEmail: {\n        subject,\n        htmlBody,\n        recipient: 'don@callteksupport.com'\n      },\n      adminTemplateError: error.message\n    }\n  }];\n}"
+      },
+      "id": "format-admin-email",
+      "name": "Format Admin Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2250, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@callteksupport.com",
+        "toEmail": "don@callteksupport.com",
+        "subject": "={{ $json.adminEmail.subject }}",
+        "body": "={{ $json.adminEmail.htmlBody }}",
+        "options": {
+          "isBodyHtml": true
+        }
+      },
+      "id": "send-admin-email",
+      "name": "Send Admin Alert",
+      "type": "n8n-nodes-base.awsSes",
+      "typeVersion": 1,
+      "position": [2450, 200],
+      "credentials": {
+        "aws": {
+          "id": "",
+          "name": "Amazon SES - Notifications"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Send admin alert to don@callteksupport.com. Configure AWS credential after import."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final logging node - captures result of email sending attempts\n// This ensures we have a record even if emails fail\n\ntry {\n  const context = $input.first().json;\n  \n  return [{\n    json: {\n      status: 'completed',\n      timestamp: new Date().toISOString(),\n      projectId: context.projectId,\n      projectName: context.projectName,\n      errorType: context.errorType,\n      emailSent: context.shouldSendEmail !== false,\n      deduplicated: context.shouldSendEmail === false,\n      workflowName: context.workflowName\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      status: 'completed_with_errors',\n      timestamp: new Date().toISOString(),\n      loggingError: error.message\n    }\n  }];\n}"
+      },
+      "id": "log-completion",
+      "name": "Log Completion",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2650, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Handle deduplicated case - increment count without sending email\n// This path is taken when we're within the 5-minute deduplication window\n\ntry {\n  const context = $json;\n  \n  return [{\n    json: {\n      status: 'deduplicated',\n      timestamp: new Date().toISOString(),\n      projectId: context.projectId,\n      projectName: context.projectName,\n      errorType: context.errorType,\n      dedupKey: context.dedupKey,\n      reason: 'Within 5-minute deduplication window',\n      existingRecordId: context.existingRecordId,\n      currentCount: context.currentCount + 1\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      status: 'deduplicated_error',\n      timestamp: new Date().toISOString(),\n      error: error.message\n    }\n  }];\n}"
+      },
+      "id": "log-dedup-skip",
+      "name": "Log Dedup Skip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [1650, 500]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "id": "={{ $json.existingRecordId }}",
+        "fields": {
+          "values": [
+            {
+              "fieldId": "count",
+              "fieldValue": "={{ $json.currentCount + 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "increment-dedup-count",
+      "name": "Increment Dedup Count",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [1850, 500],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "",
+          "name": "Airtable - n8n Notifications"
+        }
+      },
+      "continueOnFail": true,
+      "notes": "Increment count for deduplicated errors. Configure base and table IDs after import."
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Error Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Error Context": {
+      "main": [
+        [
+          {
+            "node": "Lookup Project Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Project Recipients": {
+      "main": [
+        [
+          {
+            "node": "Process Recipients",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Recipients": {
+      "main": [
+        [
+          {
+            "node": "Check Deduplication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Deduplication": {
+      "main": [
+        [
+          {
+            "node": "Process Deduplication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Deduplication": {
+      "main": [
+        [
+          {
+            "node": "Should Send Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Send Email?": {
+      "main": [
+        [
+          {
+            "node": "Record Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Dedup Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Exists?": {
+      "main": [
+        [
+          {
+            "node": "Update Dedup Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Dedup Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Dedup Record": {
+      "main": [
+        [
+          {
+            "node": "Format Notification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dedup Record": {
+      "main": [
+        [
+          {
+            "node": "Format Notification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Notification Email": {
+      "main": [
+        [
+          {
+            "node": "Send Notification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Notification Email": {
+      "main": [
+        [
+          {
+            "node": "Format Admin Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Admin Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Admin Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Admin Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Completion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Dedup Skip": {
+      "main": [
+        [
+          {
+            "node": "Increment Dedup Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": []
+}

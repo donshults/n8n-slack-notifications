@@ -164,7 +164,161 @@
       "name": "Update Message - Approved",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [1350, 150]
+      "position": [1350, 150],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-approved-1",
+      "name": "If Error Approved 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1550, 150]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-approved-1",
+      "name": "Wait Approved 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1750, 50]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '✅ Approved by @' + $('Extract Action').item.json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-approved-1",
+      "name": "Retry Approved 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1950, 50],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-approved-2",
+      "name": "If Error Approved 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2150, 50]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-approved-2",
+      "name": "Wait Approved 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2350, -50]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '✅ Approved by @' + $('Extract Action').item.json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-approved-2",
+      "name": "Retry Approved 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2550, -50],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-approved-3",
+      "name": "If Error Approved 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, -50]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third retry failed - trigger error workflow\n// This node throws an error to trigger the configured error workflow\n\nconst context = $('Extract Action').item.json;\n\nthrow new Error(`Slack API update failed after 3 attempts for action: ${context.actionType}, project: ${context.project}, user: ${context.user}`);"
+      },
+      "id": "trigger-error-approved",
+      "name": "Trigger Error Approved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, -150]
     },
     {
       "parameters": {
@@ -198,7 +352,161 @@
       "name": "Update Message - Rejected",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [1350, 350]
+      "position": [1350, 350],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rejected-1",
+      "name": "If Error Rejected 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1550, 350]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-rejected-1",
+      "name": "Wait Rejected 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1750, 250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '❌ Rejected by @' + $('Extract Action').item.json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-rejected-1",
+      "name": "Retry Rejected 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1950, 250],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rejected-2",
+      "name": "If Error Rejected 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2150, 250]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-rejected-2",
+      "name": "Wait Rejected 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2350, 150]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "true"
+            },
+            {
+              "name": "text",
+              "value": "={{ '❌ Rejected by @' + $('Extract Action').item.json.user + ' at ' + new Date().toLocaleTimeString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-rejected-2",
+      "name": "Retry Rejected 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2550, 150],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rejected-3",
+      "name": "If Error Rejected 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, 150]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third retry failed - trigger error workflow\n// This node throws an error to trigger the configured error workflow\n\nconst context = $('Extract Action').item.json;\n\nthrow new Error(`Slack API update failed after 3 attempts for action: ${context.actionType}, project: ${context.project}, user: ${context.user}`);"
+      },
+      "id": "trigger-error-rejected",
+      "name": "Trigger Error Rejected",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, 50]
     },
     {
       "parameters": {
@@ -232,7 +540,161 @@
       "name": "Update Message - Rollback",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [1350, 550]
+      "position": [1350, 550],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rollback-1",
+      "name": "If Error Rollback 1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1550, 550]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-rollback-1",
+      "name": "Wait Rollback 1",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1750, 450]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "false"
+            },
+            {
+              "name": "text",
+              "value": "={{ '⏪ Rollback initiated by @' + $('Extract Action').item.json.user + '...' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-rollback-1",
+      "name": "Retry Rollback 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1950, 450],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rollback-2",
+      "name": "If Error Rollback 2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2150, 450]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "wait-rollback-2",
+      "name": "Wait Rollback 2",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [2350, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Extract Action').item.json.responseUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "replace_original",
+              "value": "false"
+            },
+            {
+              "name": "text",
+              "value": "={{ '⏪ Rollback initiated by @' + $('Extract Action').item.json.user + '...' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "retry-rollback-2",
+      "name": "Retry Rollback 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2550, 350],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.error !== undefined || ($json.statusCode && $json.statusCode >= 400) }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-error-rollback-3",
+      "name": "If Error Rollback 3",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2750, 350]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Third retry failed - trigger error workflow\n// This node throws an error to trigger the configured error workflow\n\nconst context = $('Extract Action').item.json;\n\nthrow new Error(`Slack API update failed after 3 attempts for action: ${context.actionType}, project: ${context.project}, user: ${context.user}`);"
+      },
+      "id": "trigger-error-rollback",
+      "name": "Trigger Error Rollback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [2950, 250]
     },
     {
       "parameters": {
@@ -243,7 +705,7 @@
       "name": "Respond Empty",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1600, 350]
+      "position": [1600, 750]
     },
     {
       "parameters": {
@@ -253,7 +715,7 @@
       "name": "Trigger Deploy",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1550, 150],
+      "position": [2950, 50],
       "notes": "TODO: Implement GitHub Actions dispatch"
     },
     {
@@ -264,7 +726,7 @@
       "name": "Trigger Rollback",
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
-      "position": [1550, 550],
+      "position": [2950, 450],
       "notes": "TODO: Implement Railway rollback API call"
     }
   ],
@@ -387,6 +849,104 @@
       "main": [
         [
           {
+            "node": "If Error Approved 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Approved 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Approved 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Deploy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Approved 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Approved 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Approved 1": {
+      "main": [
+        [
+          {
+            "node": "If Error Approved 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Approved 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Approved 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Deploy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Approved 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Approved 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Approved 2": {
+      "main": [
+        [
+          {
+            "node": "If Error Approved 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Approved 3": {
+      "main": [
+        [
+          {
+            "node": "Trigger Error Approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Trigger Deploy",
             "type": "main",
             "index": 0
@@ -409,6 +969,104 @@
       "main": [
         [
           {
+            "node": "If Error Rejected 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rejected 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Rejected 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Rejected 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Rejected 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Rejected 1": {
+      "main": [
+        [
+          {
+            "node": "If Error Rejected 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rejected 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Rejected 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Rejected 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Rejected 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Rejected 2": {
+      "main": [
+        [
+          {
+            "node": "If Error Rejected 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rejected 3": {
+      "main": [
+        [
+          {
+            "node": "Trigger Error Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Respond Empty",
             "type": "main",
             "index": 0
@@ -418,6 +1076,104 @@
     },
     "Update Message - Rollback": {
       "main": [
+        [
+          {
+            "node": "If Error Rollback 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rollback 1": {
+      "main": [
+        [
+          {
+            "node": "Wait Rollback 1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Rollback 1": {
+      "main": [
+        [
+          {
+            "node": "Retry Rollback 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Rollback 1": {
+      "main": [
+        [
+          {
+            "node": "If Error Rollback 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rollback 2": {
+      "main": [
+        [
+          {
+            "node": "Wait Rollback 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Rollback 2": {
+      "main": [
+        [
+          {
+            "node": "Retry Rollback 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retry Rollback 2": {
+      "main": [
+        [
+          {
+            "node": "If Error Rollback 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Error Rollback 3": {
+      "main": [
+        [
+          {
+            "node": "Trigger Error Rollback",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Trigger Rollback",
