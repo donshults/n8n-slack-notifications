@@ -1,0 +1,332 @@
+{
+  "name": "Deploy Notifications",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d7cd2b6e-03b5-4f33-a04a-65dcd31961b5",
+      "name": "Start",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "started"
+            }
+          ]
+        }
+      },
+      "id": "65564c8a-cfa4-4d54-819a-8078fcfa44c9",
+      "name": "If Started",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "success"
+            }
+          ]
+        }
+      },
+      "id": "eb6caa16-ad7e-4380-8d13-325385afec2a",
+      "name": "If Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.status }}",
+              "value2": "failed"
+            }
+          ]
+        }
+      },
+      "id": "51c63f8c-3b37-4098-a466-89a8c212cad6",
+      "name": "If Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:rocket: *Deploying to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+      },
+      "id": "c19efd2a-c23c-4094-a44c-880dfa2c4079",
+      "name": "Format Started",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst commitMessage = event.commit?.message || '';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\n\nconst text = `:white_check_mark: *Deployed to ${env}*\\n*Project:* ${projectName}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n*Message:* ${commitMessage.split('\\n')[0].substring(0, 80)}\\n<${pipelineUrl}|View Pipeline>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.deploys || '#deployments',\n    text: text\n  }\n}];"
+      },
+      "id": "e8131296-b556-4e1e-8e52-058f906aff06",
+      "name": "Format Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const event = $json.event;\nconst config = $json.config;\n\nconst projectName = event.project?.name || event.project?.id || 'Unknown Project';\nconst env = event.environment || 'unknown';\nconst commitShort = event.commit?.sha?.substring(0, 7) || 'unknown';\nconst commitUrl = event.commit?.url || '#';\nconst pipelineUrl = event.pipeline?.url || '#';\nconst actor = event.actor?.github_username || event.actor?.name || 'unknown';\nconst mention = config?.mentions?.on_failure || '<!channel>';\n\nconst text = `:x: *Deployment Failed* ${mention}\\n*Project:* ${projectName}\\n*Environment:* ${env}\\n*Commit:* <${commitUrl}|${commitShort}>\\n*By:* ${actor}\\n<${pipelineUrl}|View Logs>`;\n\nreturn [{\n  json: {\n    channel: config?.channels?.alerts || '#alerts',\n    text: text\n  }\n}];"
+      },
+      "id": "18410cea-248b-4507-b3d4-327a47a46d3b",
+      "name": "Format Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "e42f5320-8bb9-4e24-a3aa-e8b207919c8b",
+      "name": "Send Slack (Started)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        256,
+        0
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "lsyqOUGXtXXnXdHQ",
+          "name": "Slack - CI/CD Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "55ae891d-eedc-4805-80c5-b699d407cce0",
+      "name": "Send Slack (Success)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        256,
+        208
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "lsyqOUGXtXXnXdHQ",
+          "name": "Slack - CI/CD Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "channel": "={{ $json.channel }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {},
+        "attachments": []
+      },
+      "id": "73830a19-e71b-4cc8-8266-15ce69326ae4",
+      "name": "Send Slack (Failed)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [
+        256,
+        400
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "lsyqOUGXtXXnXdHQ",
+          "name": "Slack - CI/CD Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Start": [
+      {
+        "json": {
+          "event": {
+            "event_type": "deploy",
+            "status": "success",
+            "project": {
+              "id": "context-vault",
+              "name": "Context Vault"
+            },
+            "environment": "staging",
+            "actor": {
+              "github_username": "donshults"
+            },
+            "commit": {
+              "sha": "abc123def456",
+              "message": "Test notification"
+            },
+            "pipeline": {
+              "id": "12345",
+              "url": "https://github.com/donshults/ThisIsDonsBrain/actions/runs/12345"
+            },
+            "_received_at": "2025-12-20T19:28:17.821Z"
+          },
+          "config": {
+            "channels": {
+              "default": "#deployments",
+              "deploys": "#deployments",
+              "alerts": "#alerts",
+              "approvals": "#deployment-approvals"
+            },
+            "notifications": {
+              "test_success": false,
+              "test_failure": true,
+              "deploy_started": true,
+              "deploy_success": true,
+              "deploy_failure": true
+            },
+            "mentions": {
+              "on_failure": "<!channel>",
+              "approvers": []
+            }
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "If Started",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Started": {
+      "main": [
+        [
+          {
+            "node": "Format Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Success": {
+      "main": [
+        [
+          {
+            "node": "Format Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Failed": {
+      "main": [
+        [
+          {
+            "node": "Format Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Started": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Started)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Success": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Success)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Failed": {
+      "main": [
+        [
+          {
+            "node": "Send Slack (Failed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b5ccc699-8ced-4863-85ce-c0d82d07f9eb",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c3317af6cffc858d251b9965291e19fc3a967e51d0a48119314e85b72a33c55a"
+  },
+  "id": "sWt5aNBdRT4HU0AY",
+  "tags": []
+}

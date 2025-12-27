@@ -1,0 +1,305 @@
+{
+  "name": "Notification Receiver",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notify",
+        "options": {}
+      },
+      "id": "545cc856-b681-468b-95fe-9024a99beb6a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        160
+      ],
+      "webhookId": "notification-receiver"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate and normalize the incoming event\nconst body = $input.first().json.body || $input.first().json;\n\nif (!body.event_type) {\n  throw new Error('Missing required field: event_type');\n}\n\nif (!body.project || !body.project.id) {\n  throw new Error('Missing required field: project.id');\n}\n\n// Normalize and add metadata\nconst event = {\n  ...body,\n  status: (body.status || 'unknown').toLowerCase(),\n  _received_at: new Date().toISOString()\n};\n\n// Default config (can be replaced with Airtable lookup later)\nconst config = {\n  channels: {\n    default: '#deployments',\n    deploys: '#deployments',\n    alerts: '#alerts',\n    approvals: '#deployment-approvals'\n  },\n  notifications: {\n    test_success: false,\n    test_failure: true,\n    deploy_started: true,\n    deploy_success: true,\n    deploy_failure: true\n  },\n  mentions: {\n    on_failure: '<!channel>',\n    approvers: []\n  }\n};\n\nreturn [{ json: { event, config } }];"
+      },
+      "id": "51e95636-d2b4-4f4e-9af3-f765e158ba18",
+      "name": "Validate & Configure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "deploy"
+            }
+          ]
+        }
+      },
+      "id": "b370da71-ea29-4467-8cb9-8fa944b27469",
+      "name": "If Deploy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        64
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "test"
+            }
+          ]
+        }
+      },
+      "id": "98073c84-8359-4702-a4af-45bc7b1386a3",
+      "name": "If Test",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.event.event_type }}",
+              "value2": "alert"
+            }
+          ]
+        }
+      },
+      "id": "de264cfa-5dec-4f0e-bd2d-a1a38bb6a939",
+      "name": "If Alert",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        464
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": "sWt5aNBdRT4HU0AY",
+        "options": {}
+      },
+      "id": "53967e1c-8117-422f-a780-78cd3360b955",
+      "name": "Deploy Notifications",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log test events for now\nconsole.log('Test event received:', $json.event);\nreturn $input.all();"
+      },
+      "id": "73495f62-9c23-4c4f-893a-ab4cfcef2249",
+      "name": "Handle Test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log alert events for now\nconsole.log('Alert event received:', $json.event);\nreturn $input.all();"
+      },
+      "id": "d2936cfb-a2c2-4bda-a61b-0ab35bdacfd4",
+      "name": "Handle Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log unknown events\nconsole.log('Unknown event type:', $json.event.event_type);\nreturn $input.all();"
+      },
+      "id": "c1d39488-f7d9-48af-acce-3f1ba0fe04a1",
+      "name": "Handle Unknown",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        0,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "received",
+              "value": "true"
+            },
+            {
+              "name": "event_type",
+              "value": "={{ $json.event.event_type }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.event.project.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a8da5f32-6716-4055-b3b8-fab737a29854",
+      "name": "Set Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        256,
+        160
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Configure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Configure": {
+      "main": [
+        [
+          {
+            "node": "If Deploy",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Test",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Deploy": {
+      "main": [
+        [
+          {
+            "node": "Deploy Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Unknown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Test": {
+      "main": [
+        [
+          {
+            "node": "Handle Test",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Alert": {
+      "main": [
+        [
+          {
+            "node": "Handle Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deploy Notifications": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Test": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Alert": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Unknown": {
+      "main": [
+        [
+          {
+            "node": "Set Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9750ce3b-2892-4fde-89d3-59ffe4b76e2c",
+  "meta": {
+    "instanceId": "c3317af6cffc858d251b9965291e19fc3a967e51d0a48119314e85b72a33c55a"
+  },
+  "id": "vaoJtZiWQ3v1pigP",
+  "tags": []
+}

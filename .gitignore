@@ -15,3 +15,9 @@ Thumbs.db
 
 # Node modules (if any scripts are added)
 node_modules/
+
+# Claude Code config (contains API keys)
+claude.json
+
+# Files with secrets
+backup/Workflow\ IDs.md
