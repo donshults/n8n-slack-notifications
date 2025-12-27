@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PROJECT_ID: n8n-slack-notifications
+  PROJECT_NAME: n8n Slack Notifications
+
+jobs:
+  validate:
+    name: Validate Workflows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Notify Started
+        if: github.event_name == 'push'
+        run: |
+          curl -s -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "started",
+              "project": {
+                "id": "${{ env.PROJECT_ID }}",
+                "name": "${{ env.PROJECT_NAME }}"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": ${{ toJSON(github.event.head_commit.message) }},
+                "url": "${{ github.event.head_commit.url }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }' || true
+
+      - name: Validate JSON files
+        run: |
+          echo "Validating workflow JSON files..."
+          for file in workflows/*.json; do
+            if [ -f "$file" ]; then
+              echo "Checking $file"
+              python3 -m json.tool "$file" > /dev/null
+            fi
+          done
+          echo "All JSON files are valid!"
+
+      - name: Check documentation
+        run: |
+          echo "Checking required documentation exists..."
+          required_docs=(
+            "docs/PROJECT-INTEGRATION.md"
+            "docs/SLACK-APP-SETUP.md"
+            "docs/N8N-VPS-SETUP.md"
+            "docs/EMAIL-FALLBACK-SETUP.md"
+            "docs/AIRTABLE-SETUP.md"
+            "CLAUDE.md"
+            "README.md"
+          )
+
+          for doc in "${required_docs[@]}"; do
+            if [ -f "$doc" ]; then
+              echo "  [OK] $doc"
+            else
+              echo "  [MISSING] $doc"
+              exit 1
+            fi
+          done
+          echo "All required documentation present!"
+
+      - name: Notify Success
+        if: success() && github.event_name == 'push'
+        run: |
+          curl -s -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "success",
+              "project": {
+                "id": "${{ env.PROJECT_ID }}",
+                "name": "${{ env.PROJECT_NAME }}"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": ${{ toJSON(github.event.head_commit.message) }},
+                "url": "${{ github.event.head_commit.url }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }' || true
+
+      - name: Notify Failure
+        if: failure() && github.event_name == 'push'
+        run: |
+          curl -s -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event_type": "deploy",
+              "status": "failed",
+              "project": {
+                "id": "${{ env.PROJECT_ID }}",
+                "name": "${{ env.PROJECT_NAME }}"
+              },
+              "environment": "production",
+              "actor": {
+                "github_username": "${{ github.actor }}"
+              },
+              "commit": {
+                "sha": "${{ github.sha }}",
+                "message": ${{ toJSON(github.event.head_commit.message) }},
+                "url": "${{ github.event.head_commit.url }}"
+              },
+              "pipeline": {
+                "id": "${{ github.run_id }}",
+                "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              }
+            }' || true
